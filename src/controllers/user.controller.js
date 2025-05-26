@@ -174,5 +174,66 @@ const refreshAccessToken=asyncHandler(async(req,res)=>{
   }
 })
 
+const changeCurrentPassword=asyncHandler(async(req,res)=>{
+  const {oldPassword,newPassword}=req.body;
+  
+  const user=await User.findById(req.user._id)
 
-export { registerUser,loginUser,logoutUser,refreshAccessToken}
+ if(!await user.isPasswordCorrect(oldPassword))
+ {
+   throw new ApiErros(401,"invalid old password")
+ }
+ user.password=newPassword;
+ await user.save({validateBeforeSave:false})
+
+ return res.status(200).json(new ApiResponse(200,{},"password change successfuly"))
+})
+
+const getCurrentUser=asyncHandler(async(req,res)=>{
+  const user=req.user;
+  return res.status(200).json(new ApiResponse(200,req.user,"current user fetch successfully"))
+})
+
+const updateAccountDetails=asyncHandler(async(req,res)=>{
+  const {fullname,email}=req.body
+  if(!(fullname||email))
+  {
+    throw new ApiErros(400,"username or emial is required");
+  }
+  const user=await User.findByIdAndUpdate(req.user._id,{
+  
+   $set:{
+    fullname:fullname,
+    email:email
+   }
+
+  },{new:true})
+
+  return res.status(200).
+  json(new ApiResponse(200,user,"data updated"))
+})
+
+const updateUserAvatar=asyncHandler(async(req,res)=>
+{
+ const avatarLocalPath=req.file?.path
+ if(!avatarLocalPath)
+   throw new ApiErros(400,"avatar file missing")
+  console.log(avatarLocalPath)
+  const avatar=await uploadOncloudinary(avatarLocalPath)
+
+  if(!avatar?.url)
+  {
+    throw new ApiErros(400,"Error when upload to cloundinary")
+
+  }
+
+  const user=await User.findByIdAndUpdate(req.user._id,{$set:{
+    avatar:avatar?.url
+  }},{new:true})
+  return res
+  .status(200) 
+  .json(new ApiResponse(200,user,"avatar upload successfully"))
+}
+)
+
+export { registerUser,loginUser,logoutUser,refreshAccessToken,changeCurrentPassword,getCurrentUser,updateAccountDetails,updateUserAvatar}
