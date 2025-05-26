@@ -1,14 +1,14 @@
 class ApiErros extends Error{
-  constructor(stausCode,message="Something went wrong",errors=[],statck=""){
+  constructor(stausCode,message="Something went wrong",errors=[],stack=""){
     super(message)
     this.statusCode=stausCode,
     this.data=null,
     this.message=message,
     this.success=false,
     this.errors=errors
-   if(statck)
+   if(stack)
    {
-    this.stack=statck
+    this.stack=stack
    }
    else{
     Error.captureStackTrace(this,this.constructor)
