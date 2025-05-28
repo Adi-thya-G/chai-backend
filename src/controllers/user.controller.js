@@ -2,8 +2,10 @@ import {asyncHandler} from '../utils/asyncHandler.js'
 import {ApiErros} from '../utils/ApiErrors.js'
 import {ApiResponse} from '../utils/ApiResponse.js'
 import {User} from '../models/user.model.js'
+import {Video} from '../models/video.model.js'
 import { uploadOncloudinary} from '../utils/cloudinary.js'
 import jwt from 'jsonwebtoken'
+import mongoose from 'mongoose'
 
 const genearteAccessAndRefershToken=async(userId)=>{
 try {
@@ -235,5 +237,162 @@ const updateUserAvatar=asyncHandler(async(req,res)=>
   .json(new ApiResponse(200,user,"avatar upload successfully"))
 }
 )
+const getUserChannelProfile=asyncHandler(async(req,res)=>{
+  const {username}=req.params;
+  if(!username?.trim())
+  {
+    throw new ApiErros(400,"username is missing");
+  }
+  const channel=await User.aggregate([
+     {
+      $match:{
+        username:username?.toLowerCase()
+           }
+     },
+     {
+      $lookup:{
+        from:"subscriptions",
+         localField:"_id",
+         foreignField:"channel",
+         as:"subscribers"
+      }
+     },
+     {
+      $lookup:{
+        from :"subscriptions",
+        localField:"_id",
+        foreignField:"subscriber",
+        as:"subscriberTo"
+      }
+     },
+     {
+      $addFields:{
+        SubscribersCount:{
+          $size:"$subscribers"
+        },
+        channelSubscribedCount:{
+            $size:"$subscriberTo"
+        },
+        isSubscribed:{
+          $cond:{
+            if:{$in:[req.user?._id,"$subscribers.subscriber"]},
+            then:true,
+            else:false
+          }
+        }
+      }
+     },{
+      $project:{
+        fullname:1,
+        username:1,
+        channelSubscribedCount:1,
+           SubscribersCount:1,
+           // here 1 means flag true which data show
+        isSubscribed:1,
+        avatar:1,
+        coverImage:1,
+        email:1
+      
+     }}
 
-export { registerUser,loginUser,logoutUser,refreshAccessToken,changeCurrentPassword,getCurrentUser,updateAccountDetails,updateUserAvatar}
+  ])
+  if(!channel?.length)
+  {
+    throw new ApiErros(404,"channel does not exit")
+  }
+  return res.status(200)
+  .json(new ApiResponse(200,channel[0],"User channel fecth successfully"))
+  console.log(channel)
+})
+
+const getWatchHistory=asyncHandler(async(req,res)=>{
+ const user = await User.aggregate([
+  {
+    $match: {
+      _id: new mongoose.Types.ObjectId(req.user._id)
+    }
+  },
+  {
+    $addFields: {
+      watchHistoryObjectIds: {
+        $map: {
+          input: "$watchHistory",
+          as: "id",
+          in: { $toObjectId: "$$id" }
+        }
+      }
+    }
+  },
+  {
+    $lookup: {
+      from: "videos",
+      let: { historyIds: "$watchHistoryObjectIds" },
+      pipeline: [
+        {
+          $match: {
+            $expr: { $in: ["$_id", "$$historyIds"] }
+          }
+        },
+        {
+          $lookup: {
+            from: "users",
+            localField: "owner",
+            foreignField: "_id",
+            as: "owner",
+            pipeline: [
+             {
+              $project:{
+                fullname:1,
+                email:1
+              }
+             }
+            ]
+          }
+        },
+        {
+          $addFields: {
+            owner: { $first: "$owner" }
+          }
+        }
+      ],
+      as: "watchHistory"
+    }
+  },
+  {
+    $project: {
+      username: 1,
+      email: 1,
+      watchHistory: 1
+    }
+  }
+]);
+
+
+
+     console.log(user)
+     
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(
+            200,
+            user,
+            "Watch history fetched successfully"
+        )
+    )
+
+ 
+})
+
+export { 
+registerUser,
+loginUser,
+logoutUser,
+refreshAccessToken,
+changeCurrentPassword,
+getCurrentUser,
+updateAccountDetails,
+updateUserAvatar,
+getUserChannelProfile,
+getWatchHistory
+}
